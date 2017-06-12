@@ -1,0 +1,258 @@
+{
+    "kind": "Template",
+    "apiVersion": "v1",
+    "metadata": {
+        "annotations": {
+            "description": "Application template for Apache WebServer 2.4 built using S2I.",
+            "iconClass": "icon-jboss",
+            "tags": "web,httpd,apache,s2i",
+            "version": "1"
+        },
+        "name": "apache-webserver24-s2i"
+    },
+    "labels": {
+        "template": "apache-webserver24-s2i",
+        "xpaas": "1.4"
+    },
+    "parameters": [
+        {
+            "description": "The name for the application.",
+            "name": "APPLICATION_NAME",
+            "value": "web",
+            "required": true
+        },
+        {
+            "description": "Custom hostname for http service route.  Leave blank for default hostname, e.g.: <application-name>-<project>.<default-domain-suffix>",
+            "name": "HOSTNAME_HTTP",
+            "value": "",
+            "required": false
+        },
+        {
+            "description": "Git source URI for application",
+            "name": "SOURCE_REPOSITORY_URL",
+            "value": "https://ora01000@gitlab.com/ora01000/html.git",
+            "required": true
+        },
+        {
+            "description": "Git branch/tag reference",
+            "name": "SOURCE_REPOSITORY_REF",
+            "value": "master",
+            "required": false
+        },
+        {
+            "description": "Path within Git project to build; empty for root project directory.",
+            "name": "CONTEXT_DIR",
+            "value": "/",
+            "required": false
+        },
+        {
+            "description": "GitHub trigger secret",
+            "name": "GITHUB_WEBHOOK_SECRET",
+            "from": "[a-zA-Z0-9]{8}",
+            "generate": "expression",
+            "required": true
+        },
+        {
+            "description": "Generic build trigger secret",
+            "name": "GENERIC_WEBHOOK_SECRET",
+            "from": "[a-zA-Z0-9]{8}",
+            "generate": "expression",
+            "required": true
+        },
+        {
+            "description": "Namespace in which the ImageStreams for Red Hat Middleware images are installed. These ImageStreams are normally installed in the openshift namespace. You should only need to modify this if you've installed the ImageStreams in a different namespace/project.",
+            "name": "IMAGE_STREAM_NAMESPACE",
+            "value": "openshift",
+            "required": true
+        },
+        {
+            "description": "By default, httpd logs into standard output, so the logs are accessible by using the docker logs command. When HTTPD_LOG_TO_VOLUME is set, httpd logs into /var/log/httpd24, which can be mounted to host system using the Docker volumes.",
+            "name": "HTTPD_LOG_TO_VOLUME",
+            "value": "",
+            "required": false
+        }
+    ],
+    "objects": [
+        {
+            "kind": "Service",
+            "apiVersion": "v1",
+            "spec": {
+                "ports": [
+                    {
+                        "port": 8080,
+                        "targetPort": 8080
+                    }
+                ],
+                "selector": {
+                    "deploymentConfig": "${APPLICATION_NAME}"
+                }
+            },
+            "metadata": {
+                "name": "${APPLICATION_NAME}-8080",
+                "labels": {
+                    "application": "${APPLICATION_NAME}"
+                },
+                "annotations": {
+                    "description": "The web server's http port."
+                }
+            }
+        },
+        {
+            "kind": "Route",
+            "apiVersion": "v1",
+            "id": "${APPLICATION_NAME}-web",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "application": "${APPLICATION_NAME}"
+                },
+                "annotations": {
+                    "description": "Route for application's http service."
+                }
+            },
+            "spec": {
+                "host": "${HOSTNAME_HTTP}",
+                "to": {
+                    "name": "${APPLICATION_NAME}-8080"
+                }
+            }
+        },
+        {
+            "kind": "ImageStream",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "application": "${APPLICATION_NAME}"
+                }
+            }
+        },
+        {
+            "kind": "BuildConfig",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "application": "${APPLICATION_NAME}"
+                }
+            },
+            "spec": {
+                "source": {
+                    "type": "Git",
+                    "git": {
+                        "uri": "${SOURCE_REPOSITORY_URL}",
+                        "ref": "${SOURCE_REPOSITORY_REF}"
+                    },
+                    "contextDir": "${CONTEXT_DIR}"
+                },
+                "strategy": {
+                    "type": "Source",
+                    "sourceStrategy": {
+                        "forcePull": true,
+                        "from": {
+                            "kind": "ImageStreamTag",
+                            "namespace": "${IMAGE_STREAM_NAMESPACE}",
+                            "name": "rhscl-httpd:latest"
+                        }
+                    }
+                },
+                "output": {
+                    "to": {
+                        "kind": "ImageStreamTag",
+                        "name": "${APPLICATION_NAME}:latest"
+                    }
+                },
+                "triggers": [
+                    {
+                        "type": "GitHub",
+                        "github": {
+                            "secret": "${GITHUB_WEBHOOK_SECRET}"
+                        }
+                    },
+                    {
+                        "type": "Generic",
+                        "generic": {
+                            "secret": "${GENERIC_WEBHOOK_SECRET}"
+                        }
+                    },
+                    {
+                        "type": "ImageChange",
+                        "imageChange": {}
+                    },
+                    {
+                        "type": "ConfigChange"
+                    }
+                ]
+            }
+        },
+        {
+            "kind": "DeploymentConfig",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "${APPLICATION_NAME}",
+                "labels": {
+                    "application": "${APPLICATION_NAME}"
+                }
+            },
+            "spec": {
+                "strategy": {
+                    "type": "Rolling"
+                },
+                "triggers": [
+                    {
+                        "type": "ImageChange",
+                        "imageChangeParams": {
+                            "automatic": true,
+                            "containerNames": [
+                                "${APPLICATION_NAME}"
+                            ],
+                            "from": {
+                                "kind": "ImageStreamTag",
+                                "name": "${APPLICATION_NAME}:latest"
+                            }
+                        }
+                    },
+                    {
+                        "type": "ConfigChange"
+                    }
+                ],
+                "replicas": 1,
+                "selector": {
+                    "deploymentConfig": "${APPLICATION_NAME}"
+                },
+                "template": {
+                    "metadata": {
+                        "name": "${APPLICATION_NAME}",
+                        "labels": {
+                            "deploymentConfig": "${APPLICATION_NAME}",
+                            "application": "${APPLICATION_NAME}"
+                        }
+                    },
+                    "spec": {
+                        "terminationGracePeriodSeconds": 60,
+                        "containers": [
+                            {
+                                "name": "${APPLICATION_NAME}",
+                                "image": "${APPLICATION_NAME}",
+                                "imagePullPolicy": "Always",
+                                "ports": [
+                                    {
+                                        "name": "http",
+                                        "containerPort": 8080,
+                                        "protocol": "TCP"
+                                    }
+                                ],
+                                "env": [
+                                    {
+                                        "name": "HTTPD_LOG_TO_VOLUME",
+                                        "value": "${HTTPD_LOG_TO_VOLUME}"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}

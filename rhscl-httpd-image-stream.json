@@ -1,0 +1,37 @@
+{
+    "kind": "List",
+    "apiVersion": "v1",
+    "metadata": {
+        "name": "rhscl-httpd-image-streams",
+        "annotations": {
+            "description": "ImageStream definitions for RedHat Apache WebServer S2I."
+        }
+    },
+    "items": [
+        {
+            "kind": "ImageStream",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": "rhscl-httpd"
+            },
+            "spec": {
+                "dockerImageRepository": "10.0.1.125:5000/rhscl/httpd-24-rhel7",
+                "tags": [
+                    {
+                        "name": "1.0",
+                        "annotations": {
+                            "description": "Apache2.4 WebServer S2I images.",
+                            "iconClass": "icon-jboss",
+                            "tags": "builder,apache,web",
+                            "supports":"xpaas:1.4",
+                            "sampleRepo": "https://ora01000@gitlab.com/ora01000/html.git",
+                            "sampleContextDir": "/",
+                            "sampleRef": "master",
+                            "version": "latest"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
